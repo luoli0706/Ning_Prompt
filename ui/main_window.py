@@ -64,23 +64,25 @@ class AppViews:
         self.on_run_callback = on_run_callback
         
         self.lang = self.config_manager.get_language()
+        
+        # State
         self._init_components()
 
     def T(self, key):
         return TRANSLATIONS.get(self.lang, TRANSLATIONS["en"]).get(key, key)
 
     def _init_components(self):
-        # 1. Input Field (Transparent to let container style show)
+        # 1. Input Field
         self.prompt_field = ft.TextField(
             hint_text=self.T("input_placeholder"),
             multiline=True,
             min_lines=15,
-            border=ft.InputBorder.NONE, # Remove default border
+            border=ft.InputBorder.NONE, 
             text_size=14,
             cursor_color=ACCENT_CYAN,
         )
 
-        # 2. Mode Dropdown - Styled directly to avoid ghosting
+        # 2. Mode Dropdown (Restored ft.Dropdown with custom styling)
         self.mode_dropdown = ft.Dropdown(
             options=[
                 ft.dropdown.Option("enhance", self.T("mode_enhance")),
@@ -92,10 +94,12 @@ class AppViews:
             border_radius=10,
             border_color=ACCENT_CYAN,
             border_width=1,
-            bgcolor=ft.colors.with_opacity(0.05, ACCENT_CYAN), # Subtle background
+            bgcolor=ft.colors.TRANSPARENT, # Transparent background
             text_size=14,
             height=45,
             content_padding=10,
+            color=ACCENT_CYAN, # Text color
+            on_change=lambda e: self.page.update() # Ensure UI updates when mode changes
         )
 
         # 3. Slider
@@ -114,36 +118,29 @@ class AppViews:
             code_theme="atom-one-dark",
         )
         
-        # 5. Run Button (Elevated)
+        # 5. Run Button
         self.run_btn = ft.Container(
             content=ft.Text(self.T("process_btn"), weight="bold", color="white", size=16),
             alignment=ft.alignment.center,
             padding=ft.padding.symmetric(vertical=15, horizontal=30),
             border_radius=30,
             gradient=ft.LinearGradient(colors=ACCENT_GRADIENT),
-            shadow=ft.BoxShadow(
-                spread_radius=1, blur_radius=10, color=ft.colors.with_opacity(0.4, ACCENT_CYAN), offset=ft.Offset(0, 4)
-            ),
+            shadow=ft.BoxShadow(spread_radius=1, blur_radius=10, color=ft.colors.with_opacity(0.4, ACCENT_CYAN), offset=ft.Offset(0, 4)),
             on_click=self._on_run_click_wrapper,
             animate_scale=ft.animation.Animation(100, ft.AnimationCurve.EASE_OUT),
             on_hover=self._on_btn_hover,
             ink=True,
         )
         
-        # Settings
+        # Settings inputs
         self.api_url_field = ft.TextField(label=self.T("api_url"), value=self.config_manager.get_api_url(), border_color=ACCENT_CYAN)
         self.api_key_field = ft.TextField(label=self.T("api_key"), password=True, can_reveal_password=True, value=self.config_manager.get_api_key(), border_color=ACCENT_CYAN)
-        self.language_dropdown = ft.Dropdown(
-            label=self.T("language"), options=[ft.dropdown.Option("en", "English"), ft.dropdown.Option("zh", "中文")],
-            value=self.lang, on_change=self._on_language_change, border_color=ACCENT_CYAN
-        )
-        self.theme_switch = ft.Switch(
-            label=self.T("theme"), value=(self.config_manager.get_theme_mode() == "dark"), on_change=self._on_theme_change, active_color=ACCENT_CYAN
-        )
+        self.language_dropdown = ft.Dropdown(label=self.T("language"), options=[ft.dropdown.Option("en", "English"), ft.dropdown.Option("zh", "中文")], value=self.lang, on_change=self._on_language_change, border_color=ACCENT_CYAN)
+        self.theme_switch = ft.Switch(label=self.T("theme"), value=(self.config_manager.get_theme_mode() == "dark"), on_change=self._on_theme_change, active_color=ACCENT_CYAN)
 
     def _refresh_ui_text(self):
         self.prompt_field.hint_text = self.T("input_placeholder")
-        self.mode_dropdown.options = [
+        self.mode_dropdown.options = [ # Rebuild options to update text
             ft.dropdown.Option("enhance", self.T("mode_enhance")),
             ft.dropdown.Option("weaken", self.T("mode_weaken")),
             ft.dropdown.Option("repair", self.T("mode_repair")),
@@ -157,136 +154,107 @@ class AppViews:
         self.theme_switch.label = self.T("theme")
         self.page.update()
 
-    # --- UI Helpers for Neumorphism ---
+    # --- UI Helpers ---
     def _neu_container(self, content, is_dark, recessed=False):
         bg_color = NEU_BG_DARK if is_dark else NEU_BG_LIGHT
         shadow_light = ft.colors.with_opacity(0.1, "white") if is_dark else "white"
         shadow_dark = ft.colors.with_opacity(0.5, "black") if is_dark else ft.colors.with_opacity(0.2, "#a3b1c6")
         
         if recessed:
-            # Inner Shadow for Input/Output areas
             return ft.Container(
                 content=content,
                 bgcolor=bg_color,
                 border_radius=20,
                 padding=20,
-                shadow=ft.BoxShadow(
-                    spread_radius=1, blur_radius=15, color=shadow_dark, offset=ft.Offset(5, 5), blur_style=ft.ShadowBlurStyle.INNER
-                ),
-                # Note: Flet only supports one BoxShadow per container. 
-                # For full Neu effect we ideally need two (light & dark). 
-                # We compromise with one main inner shadow for depth.
+                shadow=ft.BoxShadow(spread_radius=1, blur_radius=15, color=shadow_dark, offset=ft.Offset(5, 5), blur_style=ft.ShadowBlurStyle.INNER),
                 border=ft.border.all(1, ft.colors.with_opacity(0.05, "white")) if is_dark else None
             )
         else:
-            # Raised Container (Flat)
             return ft.Container(
                 content=content,
                 bgcolor=bg_color,
                 border_radius=20,
                 padding=20,
-                shadow=ft.BoxShadow(
-                    spread_radius=1, blur_radius=20, color=shadow_dark, offset=ft.Offset(10, 10)
-                ),
+                shadow=ft.BoxShadow(spread_radius=1, blur_radius=20, color=shadow_dark, offset=ft.Offset(10, 10)),
             )
 
     def get_main_view(self):
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bg_color = NEU_BG_DARK if is_dark else NEU_BG_LIGHT
         text_color = "white" if is_dark else "#4a5568"
-        
         self.page.bgcolor = bg_color
+
+        # Main Layout (Stack is removed as we are back to native dropdown)
+        main_layout_content = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Text(self.T("app_title").upper(), size=20, weight="bold", color=text_color),
+                            ft.IconButton(ft.icons.SETTINGS, icon_color=text_color, on_click=lambda _: self.page.go("/settings"))
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+                    ),
+                    ft.Divider(color=ft.colors.TRANSPARENT, height=20),
+                    ft.Row(
+                        [
+                            # COL 1: INPUT
+                            ft.Column(
+                                [
+                                    ft.Text(self.T("input_label"), size=12, weight="bold", color=ft.colors.with_opacity(0.5, text_color)),
+                                    ft.Container(content=self._neu_container(self.prompt_field, is_dark, recessed=True), expand=True)
+                                ],
+                                expand=4, spacing=10
+                            ),
+                            # COL 2: CONTROLS
+                            ft.Column(
+                                [
+                                    ft.Container(expand=True), # Spacer top
+                                    
+                                    # Mode Selector
+                                    ft.Text(self.T("select_mode"), size=12, weight="bold", color=ACCENT_CYAN, text_align="center"),
+                                    self.mode_dropdown,
+                                    
+                                    ft.Container(height=30),
+                                    
+                                    # Slider
+                                    ft.Text(self.T("intensity"), size=12, weight="bold", color=ACCENT_CYAN, text_align="center"),
+                                    self.intensity_slider,
+                                    
+                                    ft.Container(height=40),
+                                    
+                                    # Run Button
+                                    self.run_btn,
+                                    
+                                    ft.Container(expand=True), # Spacer bottom
+                                ],
+                                expand=2, 
+                                alignment=ft.MainAxisAlignment.CENTER,
+                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                spacing=5
+                            ),
+                            # COL 3: OUTPUT
+                            ft.Column(
+                                [
+                                    ft.Text(self.T("output_label"), size=12, weight="bold", color=ft.colors.with_opacity(0.5, text_color)),
+                                    ft.Container(content=self._neu_container(ft.Column([self.output_text], scroll=ft.ScrollMode.AUTO), is_dark, recessed=True), expand=True)
+                                ],
+                                expand=4, spacing=10
+                            ),
+                        ],
+                        expand=True, spacing=30
+                    )
+                ],
+            ),
+            padding=40,
+            expand=True,
+            bgcolor=bg_color
+        )
 
         return ft.View(
             "/",
             [
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            # Header
-                            ft.Row(
-                                [
-                                    ft.Text(self.T("app_title").upper(), size=20, weight="bold", color=text_color),
-                                    ft.IconButton(
-                                        ft.icons.SETTINGS, 
-                                        icon_color=text_color,
-                                        on_click=lambda _: self.page.go("/settings")
-                                    )
-                                ],
-                                alignment=ft.MainAxisAlignment.SPACE_BETWEEN
-                            ),
-                            ft.Divider(color=ft.colors.TRANSPARENT, height=20),
-                            
-                            # 3-Column Layout
-                            ft.Row(
-                                [
-                                    # COL 1: INPUT (Recessed)
-                                    ft.Column(
-                                        [
-                                            ft.Text(self.T("input_label"), size=12, weight="bold", color=ft.colors.with_opacity(0.5, text_color)),
-                                            ft.Container(
-                                                content=self._neu_container(self.prompt_field, is_dark, recessed=True),
-                                                expand=True
-                                            )
-                                        ],
-                                        expand=4, spacing=10
-                                    ),
-                                    
-                                    # COL 2: CONTROLS (Center)
-                                    ft.Column(
-                                        [
-                                            ft.Container(expand=True), # Spacer top
-                                            
-                                            # Mode Selector
-                                            ft.Text(self.T("select_mode"), size=12, weight="bold", color=ACCENT_CYAN, text_align="center"),
-                                            
-                                            # Dropdown directly placed, no wrapping container
-                                            self.mode_dropdown,
-                                            
-                                            ft.Container(height=30),
-                                            
-                                            # Slider
-                                            ft.Text(self.T("intensity"), size=12, weight="bold", color=ACCENT_CYAN, text_align="center"),
-                                            self.intensity_slider,
-                                            
-                                            ft.Container(height=40),
-                                            
-                                            # Run Button
-                                            self.run_btn,
-                                            
-                                            ft.Container(expand=True), # Spacer bottom
-                                        ],
-                                        expand=2, 
-                                        alignment=ft.MainAxisAlignment.CENTER,
-                                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                                        spacing=5
-                                    ),
-                                    
-                                    # COL 3: OUTPUT (Recessed)
-                                    ft.Column(
-                                        [
-                                            ft.Text(self.T("output_label"), size=12, weight="bold", color=ft.colors.with_opacity(0.5, text_color)),
-                                            ft.Container(
-                                                content=self._neu_container(
-                                                    ft.Column([self.output_text], scroll=ft.ScrollMode.AUTO), 
-                                                    is_dark, 
-                                                    recessed=True
-                                                ),
-                                                expand=True
-                                            )
-                                        ],
-                                        expand=4, spacing=10
-                                    ),
-                                ],
-                                expand=True,
-                                spacing=30
-                            )
-                        ],
-                    ),
-                    padding=40,
-                    expand=True,
-                    bgcolor=bg_color
-                )
+                main_layout_content # No Stack needed for modal
             ],
             padding=0,
             bgcolor=bg_color
@@ -304,34 +272,34 @@ class AppViews:
                 ft.Container(
                     content=ft.Column(
                         [
-                             # Header
+                            # Header
                             ft.Row(
                                 [
-                                    ft.IconButton(ft.icons.ARROW_BACK, icon_color=text_color, on_click=self._save_and_go_back),
-                                    ft.Text(self.T("settings_title").upper(), size=20, weight="bold", color=text_color),
-                                    ft.Container(width=40), # Balance space
-                                ],
+                                    ft.IconButton(ft.icons.ARROW_BACK, icon_color=text_color, on_click=self._save_and_go_back), 
+                                    ft.Text(self.T("settings_title").upper(), size=20, weight="bold", color=text_color), 
+                                    ft.Container(width=40)
+                                ], 
                                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN
                             ),
                             ft.Divider(color=ft.colors.TRANSPARENT, height=20),
                             
-                            # Settings Content
-                            ft.Container(
-                                content=ft.Column([
-                                    ft.Text(self.T("api_config"), weight="bold", color=ACCENT_CYAN), 
+                            # Settings Content Wrapped in Neu Container
+                            self._neu_container(
+                                ft.Column([
+                                    ft.Text(self.T("api_config").upper(), weight="bold", color=ACCENT_CYAN, size=14), 
                                     self.api_url_field, 
                                     self.api_key_field,
                                     
                                     ft.Divider(height=30, color=ft.colors.with_opacity(0.1, text_color)),
                                     
-                                    ft.Text(self.T("general_settings"), weight="bold", color=ACCENT_CYAN), 
+                                    ft.Text(self.T("general_settings").upper(), weight="bold", color=ACCENT_CYAN, size=14), 
                                     self.language_dropdown, 
                                     self.theme_switch,
                                     
                                     ft.Container(height=30),
                                     
                                     ft.ElevatedButton(
-                                        self.T("save_return"), 
+                                        self.T("save_return").upper(), 
                                         on_click=self._save_and_go_back,
                                         style=ft.ButtonStyle(
                                             color="white",
@@ -341,47 +309,45 @@ class AppViews:
                                         )
                                     )
                                 ], spacing=20), 
-                                padding=30,
-                                bgcolor=bg_color, # Same bg to blend in or slightly different? Let's use neu container logic if needed, but simple is clean.
-                                # Let's actually put it in a raised neu container
-                            ),
-                            
-                        ],
-                    ),
-                    padding=40,
-                    expand=True,
+                                is_dark=is_dark # Pass is_dark to neu_container
+                            )
+                        ], 
+                        alignment=ft.MainAxisAlignment.START,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        expand=True,
+                        scroll=ft.ScrollMode.AUTO,
+                    ), 
+                    padding=40, 
+                    expand=True, 
                     bgcolor=bg_color
                 )
             ],
-            padding=0,
+            padding=0, 
             bgcolor=bg_color
         )
 
-    # ... Event Handlers ...
+    # --- Handlers ---
     def _on_btn_hover(self, e):
         e.control.scale = 1.05 if e.data == "true" else 1.0
         e.control.update()
 
     async def _on_run_click_wrapper(self, e):
-        # UI animation
-        self.run_btn.scale = 0.95
-        self.run_btn.update()
+        self.run_btn.scale = 0.95; self.run_btn.update()
         await self._on_run_click(e)
-        self.run_btn.scale = 1.0
-        self.run_btn.update()
+        self.run_btn.scale = 1.0; self.run_btn.update()
 
-    # ... (Keep existing handlers: _on_language_change, _on_theme_change, _save_and_go_back, _on_run_click) ...
     def _on_language_change(self, e):
-        new_lang = e.control.value
-        if new_lang != self.lang:
-            self.lang = new_lang
+        if e.control.value != self.lang: 
+            self.lang = e.control.value
             self._refresh_ui_text()
-        self.page.update()
+        # Force reload to update UI text in all views
+        self.page.go(self.page.route)
 
     def _on_theme_change(self, e):
         new_mode = "dark" if e.control.value else "light"
         self.page.theme_mode = ft.ThemeMode.DARK if new_mode == "dark" else ft.ThemeMode.LIGHT
-        self.page.update()
+        # Force reload to apply theme colors to _neu_container
+        self.page.go(self.page.route)
 
     def _save_and_go_back(self, e):
         self.config_manager.set_api_url(self.api_url_field.value)
@@ -392,17 +358,12 @@ class AppViews:
         self.page.go("/")
 
     async def _on_run_click(self, e):
-        # self.run_btn.disabled = True # Container doesn't have disabled prop
         self.run_btn.opacity = 0.5
         self.output_text.value = self.T("processing")
         self.page.update()
         
-        await self.on_run_callback(
-            self.prompt_field.value,
-            self.mode_dropdown.value,
-            self.intensity_slider.value,
-            self
-        )
+        # Use mode_dropdown.value directly
+        await self.on_run_callback(self.prompt_field.value, self.mode_dropdown.value, self.intensity_slider.value, self)
         
         self.run_btn.opacity = 1.0
         self.page.update()
