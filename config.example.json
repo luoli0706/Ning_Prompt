@@ -1,6 +1,6 @@
 {
     "api_url": "https://api.deepseek.com/v1/chat/completions",
-    "api_key": "sk-88aec51863ee4ca2b69776bc9bb3c536",
+    "api_key": "YOUR_API_KEY_HERE",
     "model": "deepseek-chat",
     "language": "zh",
     "theme_mode": "dark"
