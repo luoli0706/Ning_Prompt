@@ -30,6 +30,13 @@ class ConfigManager:
         self.config["api_key"] = key
         self._save_config()
 
+    def get_model(self):
+        return self.config.get("model", "gpt-3.5-turbo")
+
+    def set_model(self, model):
+        self.config["model"] = model
+        self._save_config()
+
     def get_language(self):
         return self.config.get("language", "en")
 

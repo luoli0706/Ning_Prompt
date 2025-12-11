@@ -18,6 +18,7 @@ TRANSLATIONS = {
         "api_config": "API Configuration",
         "api_url": "API URL",
         "api_key": "API Key",
+        "api_model": "Model Name",
         "general_settings": "General Settings",
         "language": "Language",
         "theme": "Dark Mode",
@@ -41,6 +42,7 @@ TRANSLATIONS = {
         "api_config": "API 配置",
         "api_url": "API 地址 URL",
         "api_key": "API 密钥 Key",
+        "api_model": "模型名称 (Model Name)",
         "general_settings": "通用设置",
         "language": "语言 / Language",
         "theme": "深色模式",
@@ -135,6 +137,7 @@ class AppViews:
         # Settings inputs
         self.api_url_field = ft.TextField(label=self.T("api_url"), value=self.config_manager.get_api_url(), border_color=ACCENT_CYAN)
         self.api_key_field = ft.TextField(label=self.T("api_key"), password=True, can_reveal_password=True, value=self.config_manager.get_api_key(), border_color=ACCENT_CYAN)
+        self.model_field = ft.TextField(label=self.T("api_model"), value=self.config_manager.get_model(), border_color=ACCENT_CYAN)
         self.language_dropdown = ft.Dropdown(label=self.T("language"), options=[ft.dropdown.Option("en", "English"), ft.dropdown.Option("zh", "中文")], value=self.lang, on_change=self._on_language_change, border_color=ACCENT_CYAN)
         self.theme_switch = ft.Switch(label=self.T("theme"), value=(self.config_manager.get_theme_mode() == "dark"), on_change=self._on_theme_change, active_color=ACCENT_CYAN)
 
@@ -150,6 +153,7 @@ class AppViews:
         self.output_text.value = self.T("output_placeholder")
         self.api_url_field.label = self.T("api_url")
         self.api_key_field.label = self.T("api_key")
+        self.model_field.label = self.T("api_model")
         self.language_dropdown.label = self.T("language")
         self.theme_switch.label = self.T("theme")
         self.page.update()
@@ -289,6 +293,7 @@ class AppViews:
                                     ft.Text(self.T("api_config").upper(), weight="bold", color=ACCENT_CYAN, size=14), 
                                     self.api_url_field, 
                                     self.api_key_field,
+                                    self.model_field,
                                     
                                     ft.Divider(height=30, color=ft.colors.with_opacity(0.1, text_color)),
                                     
@@ -352,7 +357,8 @@ class AppViews:
     def _save_and_go_back(self, e):
         self.config_manager.set_api_url(self.api_url_field.value)
         self.config_manager.set_api_key(self.api_key_field.value)
-        self.config_manager.set_language(self.lang) 
+        self.config_manager.set_model(self.model_field.value)
+        self.config_manager.set_language(self.lang)  
         new_mode = "dark" if self.theme_switch.value else "light"
         self.config_manager.set_theme_mode(new_mode) 
         self.page.go("/")

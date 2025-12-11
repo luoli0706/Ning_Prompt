@@ -1,13 +1,14 @@
 from .llm_client import LLMClient
 import asyncio
+import json
 
 class PromptProcessor:
-    def __init__(self, llm_client: LLMClient, api_url: str, api_key: str):
+    def __init__(self, llm_client: LLMClient, api_url: str, api_key: str, model: str = "gpt-3.5-turbo"):
         self.llm_client = llm_client
         self.api_url = api_url
         self.api_key = api_key
         # Default model and temperature, can be made configurable later
-        self.model = "gpt-3.5-turbo"
+        self.model = model
         self.temperature = 0.7
 
     async def _process_with_ai(self, system_prompt: str, user_prompt: str, intensity: float) -> dict:

@@ -15,12 +15,13 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
     
     llm_client = LLMClient()
-    processor = PromptProcessor(llm_client, config_manager.get_api_url(), config_manager.get_api_key())
+    processor = PromptProcessor(llm_client, config_manager.get_api_url(), config_manager.get_api_key(), config_manager.get_model())
 
     async def run_prompt_process(original_prompt, mode, intensity, view_instance):
         # Update processor with latest config
         processor.api_url = config_manager.get_api_url()
         processor.api_key = config_manager.get_api_key()
+        processor.model = config_manager.get_model()
 
         if not processor.api_url or not processor.api_key or not original_prompt:
             view_instance.output_text.value = "Error: Please configure API Settings and enter a prompt."
