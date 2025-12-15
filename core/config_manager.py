@@ -37,6 +37,20 @@ class ConfigManager:
         self.config["model"] = model
         self._save_config()
 
+    def get_response_language(self):
+        return self.config.get("response_language", "origin")
+
+    def set_response_language(self, lang):
+        self.config["response_language"] = lang
+        self._save_config()
+
+    def get_output_format(self):
+        return self.config.get("output_format", "markdown")
+
+    def set_output_format(self, fmt):
+        self.config["output_format"] = fmt
+        self._save_config()
+
     def get_language(self):
         return self.config.get("language", "en")
 

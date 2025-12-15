@@ -17,32 +17,41 @@ def main(page: ft.Page):
     llm_client = LLMClient()
     processor = PromptProcessor(llm_client, config_manager.get_api_url(), config_manager.get_api_key(), config_manager.get_model())
 
-    async def run_prompt_process(original_prompt, mode, intensity, view_instance):
+    async def run_prompt_process(original_prompt, mode, temperature, view_instance, custom_path=None):
         # Update processor with latest config
         processor.api_url = config_manager.get_api_url()
         processor.api_key = config_manager.get_api_key()
         processor.model = config_manager.get_model()
+        
+        # Get extra params from config
+        lang = config_manager.get_response_language()
+        output_format = config_manager.get_output_format()
 
         if not processor.api_url or not processor.api_key or not original_prompt:
             view_instance.output_text.value = "Error: Please configure API Settings and enter a prompt."
+            view_instance.page.update()
             return
 
         try:
-            if mode == "enhance":
-                result = await processor.enhance_prompt(original_prompt, intensity)
-            elif mode == "weaken":
-                result = await processor.weaken_prompt(original_prompt, intensity)
-            elif mode == "repair":
-                result = await processor.repair_prompt(original_prompt, intensity)
-            elif mode == "destroy":
-                result = await processor.destroy_prompt(original_prompt, intensity)
-            else:
-                result = {"processed_prompt": "Error: Unknown Mode", "explanation": ""}
+            view_instance.output_text.value = "" # Clear previous output
+            current_text = ""
             
-            view_instance.output_text.value = f"{result.get('processed_prompt')}\n\n--- Explanation ---\n{result.get('explanation')}"
+            # Use streaming
+            async for chunk in processor.stream_prompt(mode, original_prompt, temperature, lang, output_format, custom_path):
+                current_text += chunk
+                view_instance.output_text.value = current_text
+                # Update page periodically or on every chunk? 
+                # Flet handles updates pretty well, but for very long streams, 
+                # maybe verify if we need throttling. For now, direct update.
+                view_instance.page.update()
+            
+            # Final touch
+            view_instance.output_text.value += "\n\n--- End of Generation ---"
+            view_instance.page.update()
             
         except Exception as ex:
             view_instance.output_text.value = f"Critical Error: {ex}"
+            view_instance.page.update()
 
     # Navigation Logic
     app_views = AppViews(page, config_manager, processor, run_prompt_process)

@@ -1,4 +1,6 @@
 import flet as ft
+import time
+import threading
 
 TRANSLATIONS = {
     "en": {
@@ -7,12 +9,16 @@ TRANSLATIONS = {
         "input_placeholder": "Type your prompt here...",
         "select_mode": "MODE",
         "mode_enhance": "Enhance",
-        "mode_weaken": "Weaken",
+        "mode_generalize": "Generalize",
         "mode_repair": "Repair",
-        "mode_destroy": "Destroy",
+        "mode_pruning": "Pruning",
+        "mode_custom": "Custom Template",
+        "select_template": "Select Template",
         "process_btn": "GENERATE",
-        "intensity": "INTENSITY",
+        "temperature": "CREATIVITY (Temperature)",
         "output_label": "OUTPUT",
+        "copy_btn": "Copy",
+        "copied": "Copied!",
         "output_placeholder": "Result awaits...",
         "settings_title": "Settings",
         "api_config": "API Configuration",
@@ -21,6 +27,8 @@ TRANSLATIONS = {
         "api_model": "Model Name",
         "general_settings": "General Settings",
         "language": "Language",
+        "response_lang": "Response Language",
+        "output_fmt": "Output Format",
         "theme": "Dark Mode",
         "save_return": "Save & Return",
         "processing": "Processing...",
@@ -31,12 +39,16 @@ TRANSLATIONS = {
         "input_placeholder": "在此输入您的原始提示词...",
         "select_mode": "处理模式",
         "mode_enhance": "语义增强",
-        "mode_weaken": "语义弱化",
+        "mode_generalize": "语义泛化",
         "mode_repair": "语义修复",
-        "mode_destroy": "语义破坏",
+        "mode_pruning": "语义剪枝",
+        "mode_custom": "自定义模板",
+        "select_template": "选择模板文件",
         "process_btn": "立即生成",
-        "intensity": "处理强度",
+        "temperature": "创造性 (温度)",
         "output_label": "输出结果",
+        "copy_btn": "复制",
+        "copied": "已复制!",
         "output_placeholder": "等待生成结果...",
         "settings_title": "设置",
         "api_config": "API 配置",
@@ -44,7 +56,9 @@ TRANSLATIONS = {
         "api_key": "API 密钥 Key",
         "api_model": "模型名称 (Model Name)",
         "general_settings": "通用设置",
-        "language": "语言 / Language",
+        "language": "界面语言 / Interface Lang",
+        "response_lang": "回答语言偏好",
+        "output_fmt": "输出格式",
         "theme": "深色模式",
         "save_return": "保存并返回",
         "processing": "正在处理中...",
@@ -84,29 +98,44 @@ class AppViews:
             cursor_color=ACCENT_CYAN,
         )
 
-        # 2. Mode Dropdown (Restored ft.Dropdown with custom styling)
+        # 2. Mode Dropdown
         self.mode_dropdown = ft.Dropdown(
             options=[
                 ft.dropdown.Option("enhance", self.T("mode_enhance")),
-                ft.dropdown.Option("weaken", self.T("mode_weaken")),
+                ft.dropdown.Option("generalize", self.T("mode_generalize")),
                 ft.dropdown.Option("repair", self.T("mode_repair")),
-                ft.dropdown.Option("destroy", self.T("mode_destroy")),
+                ft.dropdown.Option("pruning", self.T("mode_pruning")),
+                ft.dropdown.Option("custom", self.T("mode_custom")),
             ],
             value="enhance",
             border_radius=10,
             border_color=ACCENT_CYAN,
             border_width=1,
-            bgcolor=ft.colors.TRANSPARENT, # Transparent background
+            bgcolor=ft.colors.TRANSPARENT,
             text_size=14,
             height=45,
             content_padding=10,
-            color=ACCENT_CYAN, # Text color
-            on_change=lambda e: self.page.update() # Ensure UI updates when mode changes
+            color=ACCENT_CYAN,
+            on_change=self._on_mode_change
         )
 
-        # 3. Slider
-        self.intensity_slider = ft.Slider(
-            min=0, max=1, value=0.5, 
+        # 2.1 File Selector (Hidden by default)
+        self.file_dropdown = ft.Dropdown(
+            label=self.T("select_template"),
+            options=[],
+            visible=False,
+            border_radius=10,
+            border_color=ACCENT_CYAN,
+            text_size=14,
+            height=45,
+            content_padding=10,
+            color=ACCENT_CYAN,
+        )
+
+        # 3. Slider (Temperature)
+        self.temp_slider = ft.Slider(
+            min=0.0, max=1.0, value=0.7, 
+            divisions=10,
             label="{value}", 
             active_color=ACCENT_CYAN,
             thumb_color=ACCENT_CYAN,
@@ -120,7 +149,15 @@ class AppViews:
             code_theme="atom-one-dark",
         )
         
-        # 5. Run Button
+        # 5. Copy Button & Output Header
+        self.copy_btn = ft.IconButton(
+            icon=ft.icons.COPY,
+            tooltip=self.T("copy_btn"),
+            icon_color=ACCENT_CYAN,
+            on_click=self._on_copy_click
+        )
+
+        # 6. Run Button
         self.run_btn = ft.Container(
             content=ft.Text(self.T("process_btn"), weight="bold", color="white", size=16),
             alignment=ft.alignment.center,
@@ -134,31 +171,57 @@ class AppViews:
             ink=True,
         )
         
-        # Settings inputs
+        # Settings inputs (same as before)
         self.api_url_field = ft.TextField(label=self.T("api_url"), value=self.config_manager.get_api_url(), border_color=ACCENT_CYAN)
         self.api_key_field = ft.TextField(label=self.T("api_key"), password=True, can_reveal_password=True, value=self.config_manager.get_api_key(), border_color=ACCENT_CYAN)
         self.model_field = ft.TextField(label=self.T("api_model"), value=self.config_manager.get_model(), border_color=ACCENT_CYAN)
         self.language_dropdown = ft.Dropdown(label=self.T("language"), options=[ft.dropdown.Option("en", "English"), ft.dropdown.Option("zh", "中文")], value=self.lang, on_change=self._on_language_change, border_color=ACCENT_CYAN)
+        
+        self.resp_lang_dropdown = ft.Dropdown(
+            label=self.T("response_lang"),
+            options=[
+                ft.dropdown.Option("origin", "Same as Prompt (Origin)"),
+                ft.dropdown.Option("en", "English"),
+                ft.dropdown.Option("zh", "Chinese"),
+            ],
+            value=self.config_manager.get_response_language(),
+            border_color=ACCENT_CYAN
+        )
+        
+        self.fmt_dropdown = ft.Dropdown(
+            label=self.T("output_fmt"),
+            options=[
+                ft.dropdown.Option("markdown", "Markdown"),
+                ft.dropdown.Option("plain", "Plain Text"),
+            ],
+            value=self.config_manager.get_output_format(),
+            border_color=ACCENT_CYAN
+        )
+
         self.theme_switch = ft.Switch(label=self.T("theme"), value=(self.config_manager.get_theme_mode() == "dark"), on_change=self._on_theme_change, active_color=ACCENT_CYAN)
 
     def _refresh_ui_text(self):
         self.prompt_field.hint_text = self.T("input_placeholder")
-        self.mode_dropdown.options = [ # Rebuild options to update text
+        self.mode_dropdown.options = [
             ft.dropdown.Option("enhance", self.T("mode_enhance")),
-            ft.dropdown.Option("weaken", self.T("mode_weaken")),
+            ft.dropdown.Option("generalize", self.T("mode_generalize")),
             ft.dropdown.Option("repair", self.T("mode_repair")),
-            ft.dropdown.Option("destroy", self.T("mode_destroy")),
+            ft.dropdown.Option("pruning", self.T("mode_pruning")),
+            ft.dropdown.Option("custom", self.T("mode_custom")),
         ]
+        self.file_dropdown.label = self.T("select_template")
         self.run_btn.content.value = self.T("process_btn")
         self.output_text.value = self.T("output_placeholder")
+        self.copy_btn.tooltip = self.T("copy_btn")
         self.api_url_field.label = self.T("api_url")
         self.api_key_field.label = self.T("api_key")
         self.model_field.label = self.T("api_model")
         self.language_dropdown.label = self.T("language")
+        self.resp_lang_dropdown.label = self.T("response_lang")
+        self.fmt_dropdown.label = self.T("output_fmt")
         self.theme_switch.label = self.T("theme")
         self.page.update()
 
-    # --- UI Helpers ---
     def _neu_container(self, content, is_dark, recessed=False):
         bg_color = NEU_BG_DARK if is_dark else NEU_BG_LIGHT
         shadow_light = ft.colors.with_opacity(0.1, "white") if is_dark else "white"
@@ -188,7 +251,6 @@ class AppViews:
         text_color = "white" if is_dark else "#4a5568"
         self.page.bgcolor = bg_color
 
-        # Main Layout (Stack is removed as we are back to native dropdown)
         main_layout_content = ft.Container(
             content=ft.Column(
                 [
@@ -213,24 +275,27 @@ class AppViews:
                             # COL 2: CONTROLS
                             ft.Column(
                                 [
-                                    ft.Container(expand=True), # Spacer top
+                                    ft.Container(expand=True), 
                                     
                                     # Mode Selector
                                     ft.Text(self.T("select_mode"), size=12, weight="bold", color=ACCENT_CYAN, text_align="center"),
                                     self.mode_dropdown,
                                     
-                                    ft.Container(height=30),
+                                    # File Selector (Conditional)
+                                    self.file_dropdown,
+                                    
+                                    ft.Container(height=20),
                                     
                                     # Slider
-                                    ft.Text(self.T("intensity"), size=12, weight="bold", color=ACCENT_CYAN, text_align="center"),
-                                    self.intensity_slider,
+                                    ft.Text(self.T("temperature"), size=12, weight="bold", color=ACCENT_CYAN, text_align="center"),
+                                    self.temp_slider,
                                     
                                     ft.Container(height=40),
                                     
                                     # Run Button
                                     self.run_btn,
                                     
-                                    ft.Container(expand=True), # Spacer bottom
+                                    ft.Container(expand=True), 
                                 ],
                                 expand=2, 
                                 alignment=ft.MainAxisAlignment.CENTER,
@@ -240,7 +305,11 @@ class AppViews:
                             # COL 3: OUTPUT
                             ft.Column(
                                 [
-                                    ft.Text(self.T("output_label"), size=12, weight="bold", color=ft.colors.with_opacity(0.5, text_color)),
+                                    ft.Row([
+                                        ft.Text(self.T("output_label"), size=12, weight="bold", color=ft.colors.with_opacity(0.5, text_color)),
+                                        self.copy_btn
+                                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                                    
                                     ft.Container(content=self._neu_container(ft.Column([self.output_text], scroll=ft.ScrollMode.AUTO), is_dark, recessed=True), expand=True)
                                 ],
                                 expand=4, spacing=10
@@ -254,17 +323,8 @@ class AppViews:
             expand=True,
             bgcolor=bg_color
         )
+        return ft.View("/", [main_layout_content], padding=0, bgcolor=bg_color)
 
-        return ft.View(
-            "/",
-            [
-                main_layout_content # No Stack needed for modal
-            ],
-            padding=0,
-            bgcolor=bg_color
-        )
-
-    # --- Settings View (Styled) ---
     def get_settings_view(self):
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bg_color = NEU_BG_DARK if is_dark else NEU_BG_LIGHT
@@ -299,6 +359,8 @@ class AppViews:
                                     
                                     ft.Text(self.T("general_settings").upper(), weight="bold", color=ACCENT_CYAN, size=14), 
                                     self.language_dropdown, 
+                                    self.resp_lang_dropdown,
+                                    self.fmt_dropdown,
                                     self.theme_switch,
                                     
                                     ft.Container(height=30),
@@ -358,18 +420,64 @@ class AppViews:
         self.config_manager.set_api_url(self.api_url_field.value)
         self.config_manager.set_api_key(self.api_key_field.value)
         self.config_manager.set_model(self.model_field.value)
-        self.config_manager.set_language(self.lang)  
+        self.config_manager.set_language(self.lang) 
+        
+        # New Settings
+        self.config_manager.set_response_language(self.resp_lang_dropdown.value)
+        self.config_manager.set_output_format(self.fmt_dropdown.value)
+        
         new_mode = "dark" if self.theme_switch.value else "light"
         self.config_manager.set_theme_mode(new_mode) 
         self.page.go("/")
+
+    def _on_mode_change(self, e):
+        # Handle Custom Mode Logic
+        if self.mode_dropdown.value == "custom":
+            self._load_custom_templates()
+            self.file_dropdown.visible = True
+        else:
+            self.file_dropdown.visible = False
+        self.page.update()
+
+    def _load_custom_templates(self):
+        templates = self.processor.loader.list_custom_templates()
+        options = [ft.dropdown.Option(t["path"], t["name"]) for t in templates]
+        self.file_dropdown.options = options
+        if options:
+            self.file_dropdown.value = options[0].key
+        else:
+            self.file_dropdown.value = None
+            self.file_dropdown.hint_text = "No .md files found"
+
+    def _on_copy_click(self, e):
+        self.page.set_clipboard(self.output_text.value)
+        self.copy_btn.icon = ft.icons.CHECK
+        self.copy_btn.tooltip = self.T("copied")
+        self.page.update()
+        
+        # Reset icon after 2 seconds
+        import threading, time
+        def reset_icon():
+            time.sleep(2)
+            self.copy_btn.icon = ft.icons.COPY
+            self.copy_btn.tooltip = self.T("copy_btn")
+            self.page.update()
+        threading.Thread(target=reset_icon, daemon=True).start()
 
     async def _on_run_click(self, e):
         self.run_btn.opacity = 0.5
         self.output_text.value = self.T("processing")
         self.page.update()
         
-        # Use mode_dropdown.value directly
-        await self.on_run_callback(self.prompt_field.value, self.mode_dropdown.value, self.intensity_slider.value, self)
+        custom_path = self.file_dropdown.value if self.mode_dropdown.value == "custom" else None
+        
+        await self.on_run_callback(
+            self.prompt_field.value, 
+            self.mode_dropdown.value, 
+            self.temp_slider.value, 
+            self,
+            custom_path=custom_path # Pass custom path
+        )
         
         self.run_btn.opacity = 1.0
         self.page.update()
