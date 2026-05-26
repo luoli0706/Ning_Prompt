@@ -5,12 +5,26 @@ import asyncio
 import json
 
 class PromptProcessor:
-    def __init__(self, llm_client: LLMClient, api_url: str, api_key: str, model: str = "gpt-3.5-turbo"):
+    def __init__(self, llm_client: LLMClient, api_url: str, api_key: str, model: str = "deepseek-v4-flash", protocol: str = "openai"):
         self.llm_client = llm_client
         self.api_url = api_url
         self.api_key = api_key
         self.model = model
+        self.protocol = protocol
         self.loader = PromptLoader()
+
+    def _extract_content(self, llm_response: dict):
+        choices = llm_response.get("choices")
+        if choices:
+            return choices[0]["message"]["content"]
+
+        content_blocks = llm_response.get("content")
+        if isinstance(content_blocks, list):
+            texts = [block.get("text", "") for block in content_blocks if isinstance(block, dict) and block.get("type") == "text"]
+            if texts:
+                return "".join(texts)
+
+        raise KeyError("No supported content field found in LLM response.")
 
     async def _execute_mcp_request(self, request: MCPRequest) -> MCPResponse:
         """
@@ -38,14 +52,14 @@ class PromptProcessor:
 
         # Call LLM (non-streaming for process_prompt's internal use)
         llm_response = await self.llm_client.send_request(
-            self.api_url, self.api_key, messages, self.model, temp
+            self.api_url, self.api_key, messages, self.model, temp, self.protocol
         )
 
         if "error" in llm_response:
             return MCPResponse(error={"code": -32000, "message": llm_response["error"]})
 
         try:
-            content = llm_response["choices"][0]["message"]["content"]
+            content = self._extract_content(llm_response)
             return MCPResponse(result={
                 "processed_prompt": content,
                 "explanation": "Generated via MCP.",
@@ -96,6 +110,6 @@ class PromptProcessor:
         ]
 
         async for chunk in self.llm_client.stream_request(
-            self.api_url, self.api_key, messages, self.model, temperature
+            self.api_url, self.api_key, messages, self.model, temperature, self.protocol
         ):
             yield chunk

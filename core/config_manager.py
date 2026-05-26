@@ -6,11 +6,26 @@ class ConfigManager:
         self.config_file = config_file
         self.config = self._load_config()
 
+    def _default_config(self):
+        return {
+            "api_url": "",
+            "api_key": "",
+            "model": "deepseek-v4-flash",
+            "protocol": "openai",
+            "response_language": "origin",
+            "output_format": "markdown",
+            "language": "en",
+            "theme_mode": "dark",
+        }
+
     def _load_config(self):
         if os.path.exists(self.config_file):
             with open(self.config_file, 'r') as f:
-                return json.load(f)
-        return {"api_url": "", "api_key": "", "language": "en", "theme_mode": "dark"}
+                loaded = json.load(f)
+                defaults = self._default_config()
+                defaults.update(loaded)
+                return defaults
+        return self._default_config()
 
     def _save_config(self):
         with open(self.config_file, 'w') as f:
@@ -31,10 +46,17 @@ class ConfigManager:
         self._save_config()
 
     def get_model(self):
-        return self.config.get("model", "gpt-3.5-turbo")
+        return self.config.get("model", "deepseek-v4-flash")
 
     def set_model(self, model):
         self.config["model"] = model
+        self._save_config()
+
+    def get_protocol(self):
+        return self.config.get("protocol", "openai")
+
+    def set_protocol(self, protocol):
+        self.config["protocol"] = protocol
         self._save_config()
 
     def get_response_language(self):
