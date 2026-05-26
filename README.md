@@ -102,13 +102,17 @@ pip install -r requirements.txt
 
 ```json
 {
-    "api_url": "https://api.deepseek.com/v1/chat/completions",
+    "api_url": "",
     "api_key": "YOUR_ACTUAL_API_KEY",
-    "model": "deepseek-chat",
+    "protocol": "openai",
+    "model": "deepseek-v4-flash",
     "language": "zh",
     "theme_mode": "dark"
 }
 ```
+
+> 说明：`protocol` 默认推荐 `openai`（兼容 DeepSeek/OpenAI 风格接口），也支持 `anthropic`。  
+> 若 `api_url` 留空，程序会根据协议自动使用默认地址，通常只需填写 `api_key` 与 `model`（如 `deepseek-v4-flash` 或 `deepseek-v4-pro`）。
 
 ### 4. 运行应用
 
@@ -121,9 +125,10 @@ python main.py
 在应用界面的右上角点击“设置”图标，可以进行以下配置：
 
 *   **API 配置**:
-    *   **API URL**: 接口地址。
+    *   **API URL**: 接口地址（可留空，留空时按协议自动选择默认地址）。
     *   **API Key**: 鉴权密钥。
-    *   **模型名称**: 指定调用的 AI 模型（如 `deepseek-chat`）。
+    *   **API 协议**: 选择接口协议（默认 `openai`，支持 `anthropic`）。
+    *   **模型名称**: 指定调用的 AI 模型（如 `deepseek-v4-flash`、`deepseek-v4-pro`）。
 *   **通用设置**:
     *   **界面语言**: 切换界面语言（支持中文/English）。
     *   **回答语言偏好**: 设置 AI 输出的语言（跟随原 Prompt、强制英文、强制中文）。

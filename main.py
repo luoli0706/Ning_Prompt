@@ -15,13 +15,20 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
     
     llm_client = LLMClient()
-    processor = PromptProcessor(llm_client, config_manager.get_api_url(), config_manager.get_api_key(), config_manager.get_model())
+    processor = PromptProcessor(
+        llm_client,
+        config_manager.get_api_url(),
+        config_manager.get_api_key(),
+        config_manager.get_model(),
+        config_manager.get_protocol()
+    )
 
     async def run_prompt_process(original_prompt, mode, temperature, view_instance, custom_path=None):
         # Update processor with latest config
         processor.api_url = config_manager.get_api_url()
         processor.api_key = config_manager.get_api_key()
         processor.model = config_manager.get_model()
+        processor.protocol = config_manager.get_protocol()
         
         # Get extra params from config
         lang = config_manager.get_response_language()
